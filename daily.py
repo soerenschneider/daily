@@ -10,7 +10,7 @@ from typing import Optional, List
 from pathlib import Path
 from datetime import date, timedelta
 
-
+DEFAULT_EDITOR = 'vim'
 ENTRIES_DIR = "~/Work/daily"
 DEFAULT_EXTENSION = "txt"
 DATE_FORMAT = "%Y-%m-%d"
@@ -36,23 +36,25 @@ class Daily:
     @staticmethod
     def _validate_date(daily_date: str) -> None:
         if not daily_date:
-            raise IllegalDateException()
+            raise IllegalDateException("empty date given")
 
-        if not daily_entry_regex.match(daily_date):
-            raise IllegalDateException()
+        if not daily_entry_regex.match(daily_date.strip()):
+            raise IllegalDateException(f"Invalid date {daily_date}, "
+                                       f"date must be in format {DATE_FORMAT}")
 
     @staticmethod
-    def get_date(days=0) -> str:
-        computed_date = date.today() + timedelta(days)
+    def compute_date(days_offset=0) -> str:
+        computed_date = date.today() + timedelta(days_offset)
         return computed_date.strftime(DATE_FORMAT)
 
-    @staticmethod
-    def translate_date(special_date: str) -> str:
-        special_date = special_date.lower()
+    def translate_date(self, special_date: str) -> str:
+        special_date = special_date.lower().strip()
         if special_date in ["today", "t"]:
-            return Daily.get_date(0)
+            return Daily.compute_date(days_offset=0)
         if special_date in ["yesterday", "y"]:
-            return Daily.get_date(-1)
+            return Daily.compute_date(days_offset=-1)
+        if special_date in ["last", "l"]:
+            return self.get_latest_entry()
 
         Daily._validate_date(special_date)
         return special_date
@@ -62,7 +64,7 @@ class Daily:
 
     def get_latest_entry(self) -> Optional[str]:
         for i in range(30):
-            daily_date = Daily.get_date(-i)
+            daily_date = Daily.compute_date(-i)
             if self.has_entry(daily_date):
                 return daily_date
         return None
@@ -75,7 +77,7 @@ class Daily:
                 result.warnings.append("No entries found for the last 30 days")
                 return result
 
-            result.warnings.append(f"Nothing found for {daily_date},"
+            result.warnings.append(f"Nothing found for {daily_date}, "
                                    f"showing results for {new_daily_date}")
             daily_date = new_daily_date
 
@@ -125,7 +127,7 @@ class FsDriver:
             result.warnings.append(f"No entry for {daily_date}")
         else:
             filename = self._get_filename(daily_date)
-            subprocess.call(['vim', filename])
+            subprocess.call([DEFAULT_EDITOR, filename])
             # check if we deleted all lines
             if os.stat(filename).st_size == 0:
                 self.nuke_entries(daily_date)
@@ -153,15 +155,17 @@ class FsDriver:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", '--date', type=str, default="today", action="store")
-    subparsers = parser.add_subparsers(help='help for subcommand', dest="command")
+    parser.add_argument("-d", '--date', type=str, help="specify a date the command applies to",
+                        default="today", action="store")
+    subparsers = parser.add_subparsers(dest="command")
 
-    parser_add = subparsers.add_parser('add', help='add entries to a given day')
-    parser_add.add_argument("-m", dest="message", nargs="+", action="append")
+    parser_add = subparsers.add_parser('add', help='add one or more entries for a given day')
+    parser_add.add_argument("-m", help='express the message of the work item', dest="message",
+                            nargs="+", action="append")
 
-    subparsers.add_parser('get', help='read entry for a given day')
-    subparsers.add_parser('edit', help='delete a single entry for a given day')
-    subparsers.add_parser('nuke', help='delete all entries for a given day')
+    subparsers.add_parser('get', help='read entries for a given day')
+    subparsers.add_parser('edit', help='edit entries for a given day')
+    subparsers.add_parser('nuke', help='delete entries for a given day')
 
     return parser.parse_args()
 
@@ -178,7 +182,7 @@ def render_output(result: Result) -> None:
     if result.warnings:
         for warning in result.warnings:
             print(warning)
-        print()
+        print("---------------")
 
     for i in result.items:
         print(f"- {i}", end="")
@@ -186,28 +190,29 @@ def render_output(result: Result) -> None:
 
 def main():
     arg = parse_args()
-    daily_date = None
-    try:
-        daily_date = Daily.translate_date(arg.date)
-    except IllegalDateException:
-        print(f"Invalid date {daily_date}")
-        sys.exit(1)
 
     driver = FsDriver()
     daily = Daily(driver)
 
+    parsed_date = None
+    try:
+        parsed_date = daily.translate_date(arg.date)
+    except IllegalDateException as err:
+        print(err)
+        sys.exit(1)
+
     if arg.command == "add":
         for messages in arg.message:
-            daily.add_entry(daily_date, " ".join(messages))
+            daily.add_entry(parsed_date, " ".join(messages))
     elif arg.command == "edit":
-        result = daily.edit_entry(daily_date)
+        result = daily.edit_entry(parsed_date)
         render_output(result)
     elif arg.command == "nuke":
-        daily.get_entry(daily_date)
-        confirm_deletion(f"Do you want to delete all entries for {daily_date}? y/N")
-        daily.nuke_entries(daily_date)
+        daily.get_entry(parsed_date)
+        confirm_deletion(f"Do you want to delete all entries for {parsed_date}? y/N")
+        daily.nuke_entries(parsed_date)
     else:
-        result = daily.get_entry(daily_date)
+        result = daily.get_entry(parsed_date)
         render_output(result)
 
 
