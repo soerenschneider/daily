@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
-import os.path
 import argparse
+import os.path
 import re
 import subprocess
 import sys
 
-from typing import Optional, List
-from pathlib import Path
+from dataclasses import dataclass, field
 from datetime import date, timedelta
+from pathlib import Path
+from typing import Optional, List
 
 DEFAULT_EDITOR = 'vim'
 ENTRIES_DIR = "~/Work/daily"
@@ -22,11 +23,11 @@ class IllegalDateException(Exception):
     pass
 
 
+@dataclass
 class Result:
-    def __init__(self):
-        self.items = list()
-        self.warnings = list()
-        self.daily_date = None
+    items: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    daily_date: str = ""
 
 
 class Daily:
@@ -107,7 +108,7 @@ class FsDriver:
             daily_db_dir.mkdir(parents=True)
 
     def _get_filename(self, daily_date: str) -> str:
-        return os.path.join(self._daily_entries_dir, f"{daily_date}.{DEFAULT_EXTENSION}")
+        return os.path.join(self._daily_entries_dir, f"{daily_date}.{DEFAULT_EXTENSION.lstrip('.')}")
 
     def has_entry(self, daily_date) -> bool:
         filename = self._get_filename(daily_date)
@@ -152,6 +153,18 @@ class FsDriver:
             entries_file.write(content + os.linesep)
 
 
+class BColors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
@@ -160,7 +173,7 @@ def parse_args() -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command")
 
     parser_add = subparsers.add_parser('add', help='add one or more entries for a given day')
-    parser_add.add_argument("-m", help='express the message of the work item', dest="message",
+    parser_add.add_argument("-m", help='express the work item', dest="message",
                             nargs="+", action="append")
 
     subparsers.add_parser('get', help='read entries for a given day')
@@ -171,18 +184,16 @@ def parse_args() -> argparse.Namespace:
 
 
 def confirm_deletion(prompt: str) -> bool:
-    print(prompt)
+    print(f"{BColors.WARNING}{prompt}{BColors.ENDC}")
     choice = input().lower()
-    if choice in {'yes', 'y'}:
-        return True
-    return False
+    return choice in {'yes', 'y'}
 
 
 def render_output(result: Result) -> None:
     if result.warnings:
         for warning in result.warnings:
-            print(warning)
-        print("---------------")
+            print(f"{BColors.WARNING}{warning}")
+        print(BColors.ENDC)
 
     for i in result.items:
         print(f"- {i}", end="")
@@ -198,7 +209,7 @@ def main():
     try:
         parsed_date = daily.translate_date(arg.date)
     except IllegalDateException as err:
-        print(err)
+        print(f"{BColors.FAIL}{err}{BColors.ENDC}")
         sys.exit(1)
 
     if arg.command == "add":
