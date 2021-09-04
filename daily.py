@@ -246,11 +246,17 @@ def confirm_deletion(prompt: str) -> bool:
 def render_output(result: Result) -> None:
     if result.warnings:
         for warning in result.warnings:
-            print(f"{BColors.WARNING}{warning}")
-        print(BColors.ENDC)
+            color_print(BColors.WARNING, warning)
 
     for i in result.items:
-        print(f"- {i}", end="")
+        end = "\n"
+        if i.endswith("\n"):
+            end = ""
+        print(f"- {i}", end=end)
+
+
+def color_print(color: BColors, msg: str) -> None:
+    print(f"{color}{msg}{BColors.ENDC}")
 
 
 def main():
@@ -263,7 +269,7 @@ def main():
     try:
         parsed_date = daily.translate_date(arg.date)
     except IllegalDateException as err:
-        print(f"{BColors.FAIL}{err}{BColors.ENDC}")
+        color_print(BColors.FAIL, str(err))
         sys.exit(1)
 
     if arg.command == "add":
@@ -275,7 +281,8 @@ def main():
     elif arg.command == "nuke":
         daily.get_entry(parsed_date)
         confirm_deletion(f"Do you want to delete all entries for {parsed_date}? y/N")
-        daily.nuke_entries(parsed_date)
+        if not daily.nuke_entries(parsed_date):
+            color_print(BColors.WARNING, "There were no entries to delete")
     else:
         result = daily.get_entry(parsed_date)
         render_output(result)
