@@ -120,7 +120,7 @@ class SqliteDriver:
         results = cursor.fetchone()
         return results[0] > 0
 
-    def get_entry(self, daily_date: str) -> Optional[Result]:
+    def get_entry(self, daily_date: str) -> List[str]:
         cursor = self._con.cursor()
         converted = SqliteDriver._convert_date(daily_date)
         cursor.execute('SELECT desc FROM daily WHERE date = ?', (converted,))
@@ -259,19 +259,7 @@ def color_print(color: BColors, msg: str) -> None:
     print(f"{color}{msg}{BColors.ENDC}")
 
 
-def main():
-    arg = parse_args()
-
-    driver = SqliteDriver(SQLITE_DB_FILE)
-    daily = Daily(driver)
-
-    parsed_date = None
-    try:
-        parsed_date = daily.translate_date(arg.date)
-    except IllegalDateException as err:
-        color_print(BColors.FAIL, str(err))
-        sys.exit(1)
-
+def run_subcommands(daily: Daily, arg: argparse.Namespace, parsed_date: str):
     if arg.command == "add":
         for messages in arg.message:
             daily.add_entry(parsed_date, " ".join(messages))
@@ -286,6 +274,22 @@ def main():
     else:
         result = daily.get_entry(parsed_date)
         render_output(result)
+
+
+def main():
+    arg = parse_args()
+
+    driver = SqliteDriver(SQLITE_DB_FILE)
+    daily = Daily(driver)
+
+    parsed_date = None
+    try:
+        parsed_date = daily.translate_date(arg.date)
+    except IllegalDateException as err:
+        color_print(BColors.FAIL, str(err))
+        sys.exit(1)
+
+    run_subcommands(daily, arg, parsed_date)
 
 
 if __name__ == '__main__':
