@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.2.1](https://www.github.com/soerenschneider/daily/compare/v1.2.0...v1.2.1) (2021-09-04)
+
+
+### Bug Fixes
+
+* fix type hint ([cdeae21](https://www.github.com/soerenschneider/daily/commit/cdeae21fa503f01c6434a98ae485649099b9e5ba))
+
 ## [1.2.0](https://www.github.com/soerenschneider/daily/compare/v1.1.0...v1.2.0) (2021-09-04)
 
 
