@@ -5,6 +5,7 @@ import os.path
 import re
 import subprocess
 import sys
+import sqlite3
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -13,6 +14,7 @@ from typing import Optional, List
 
 DEFAULT_EDITOR = 'vim'
 ENTRIES_DIR = "~/Work/daily"
+SQLITE_DB_FILE = "~/Work/daily.db"
 DEFAULT_EXTENSION = "txt"
 DATE_FORMAT = "%Y-%m-%d"
 
@@ -94,6 +96,58 @@ class Daily:
 
     def add_entry(self, daily_date: str, content: str) -> None:
         return self.driver.add_entry(daily_date, content)
+
+
+class SqliteDriver:
+    def __init__(self, filename: str):
+        self._con = sqlite3.connect(os.path.expanduser(filename))
+        self._init_db()
+
+    def _init_db(self):
+        cursor = self._con.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS daily (id INTEGER PRIMARY KEY, date INTEGER, desc TEXT, tag TEXT)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS date ON daily(date)')
+        self._con.commit()
+
+    @staticmethod
+    def _convert_date(daily_date: str) -> int:
+        return int(daily_date.replace("-", ""))
+
+    def has_entry(self, daily_date: str) -> bool:
+        converted = SqliteDriver._convert_date(daily_date)
+        cursor = self._con.cursor()
+        cursor.execute('SELECT COUNT(date) FROM daily WHERE date = ?', (converted,))
+        results = cursor.fetchone()
+        return results[0] > 0
+
+    def get_entry(self, daily_date: str) -> Optional[Result]:
+        cursor = self._con.cursor()
+        converted = SqliteDriver._convert_date(daily_date)
+        cursor.execute('SELECT desc FROM daily WHERE date = ?', (converted,))
+        results = cursor.fetchall()
+        ret = []
+        for result in results:
+            ret.append(result[0])
+        return ret
+
+    def add_entry(self, daily_date: str, content: str, tag="") -> None:
+        converted = SqliteDriver._convert_date(daily_date)
+        cursor = self._con.cursor()
+        args = (None, converted, content, tag)
+        cursor.execute('INSERT INTO daily VALUES (?, ?, ?, ?)', args)
+        self._con.commit()
+        self._con.close()
+
+    def nuke_entries(self, daily_date: str) -> bool:
+        converted = SqliteDriver._convert_date(daily_date)
+        cursor = self._con.cursor()
+        result = cursor.execute('DELETE FROM daily WHERE date = ?', (converted,))
+        self._con.commit()
+        self._con.close()
+        return result.rowcount > 0
+
+    def edit_entry(self, daily_date: str) -> Result:
+        raise NotImplementedError
 
 
 class FsDriver:
@@ -202,7 +256,7 @@ def render_output(result: Result) -> None:
 def main():
     arg = parse_args()
 
-    driver = FsDriver()
+    driver = SqliteDriver(SQLITE_DB_FILE)
     daily = Daily(driver)
 
     parsed_date = None
