@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://www.github.com/soerenschneider/daily/compare/v1.1.0...v1.2.0) (2021-09-04)
+
+
+### Features
+
+* Add SQLite driver ([56bc43d](https://www.github.com/soerenschneider/daily/commit/56bc43d8022c95f9b8161dfed98a809b29ff4da6))
+
 ## [1.1.0](https://www.github.com/soerenschneider/daily/compare/v1.0.0...v1.1.0) (2021-07-23)
 
 
