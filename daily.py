@@ -91,11 +91,17 @@ class Daily:
     def nuke_entries(self, daily_date: str) -> bool:
         return self.driver.nuke_entries(daily_date)
 
-    def edit_entry(self, daily_date: str) -> Result:
-        return self.driver.edit_entry(daily_date)
+    def edit_entry(self, daily_date: str, entry_id: int, updated: str) -> int:
+        return self.driver.edit_entry(daily_date, entry_id, updated)
 
     def add_entry(self, daily_date: str, content: str) -> None:
         return self.driver.add_entry(daily_date, content)
+
+    def remove_entry(self, daily_date: str, entry_id: int) -> int:
+        return self.driver.remove_entry(daily_date, entry_id)
+
+    def get_ids(self, daily_date: str) -> List[Tuple[int, str]]:
+        return self.driver.get_ids(daily_date)
 
 
 class SqliteDriver:
@@ -123,7 +129,7 @@ class SqliteDriver:
     def get_entry(self, daily_date: str) -> List[str]:
         cursor = self._con.cursor()
         converted = SqliteDriver._convert_date(daily_date)
-        cursor.execute('SELECT desc FROM daily WHERE date = ?', (converted,))
+        cursor.execute('SELECT desc FROM daily WHERE date = ? ORDER BY id ASC', (converted,))
         results = cursor.fetchall()
         ret = []
         for result in results:
@@ -138,16 +144,33 @@ class SqliteDriver:
         self._con.commit()
         self._con.close()
 
-    def nuke_entries(self, daily_date: str) -> bool:
+    def nuke_entries(self, daily_date: str) -> int:
         converted = SqliteDriver._convert_date(daily_date)
         cursor = self._con.cursor()
         result = cursor.execute('DELETE FROM daily WHERE date = ?', (converted,))
         self._con.commit()
         self._con.close()
-        return result.rowcount > 0
+        return result.rowcount
 
-    def edit_entry(self, daily_date: str) -> Result:
-        raise NotImplementedError
+    def remove_entry(self, daily_date: str, entry_id: int) -> int:
+        cursor = self._con.cursor()
+        result = cursor.execute('DELETE FROM daily WHERE id = ?', (entry_id,))
+        self._con.commit()
+        self._con.close()
+        return result.rowcount
+
+    def edit_entry(self, daily_date: str, entry_id: int, updated: str) -> int:
+        cursor = self._con.cursor()
+        result = cursor.execute('UPDATE daily SET desc = ? WHERE id = ?', (updated, entry_id))
+        self._con.commit()
+        self._con.close()
+        return result.rowcount
+
+    def get_ids(self, daily_date: str) -> List[Tuple[int, str]]:
+        cursor = self._con.cursor()
+        converted = SqliteDriver._convert_date(daily_date)
+        cursor.execute('SELECT id, desc FROM daily WHERE date = ? ORDER BY id ASC', (converted,))
+        return cursor.fetchall()
 
 
 class FsDriver:
