@@ -10,7 +10,9 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Tuple
+
+from pyfzf.pyfzf import FzfPrompt
 
 DEFAULT_EDITOR = 'vim'
 ENTRIES_DIR = "~/Work/daily"
@@ -66,6 +68,7 @@ class Daily:
         return self.driver.has_entry(daily_date)
 
     def get_latest_entry(self) -> Optional[str]:
+        # this was written for the fs driver, doesn't scale well for sqlite
         for i in range(30):
             daily_date = Daily.compute_date(-i)
             if self.has_entry(daily_date):
@@ -199,19 +202,6 @@ class FsDriver:
             return True
         return False
 
-    def edit_entry(self, daily_date: str) -> Result:
-        result = Result()
-        if not self.has_entry(daily_date):
-            result.warnings.append(f"No entry for {daily_date}")
-        else:
-            filename = self._get_filename(daily_date)
-            subprocess.call([DEFAULT_EDITOR, filename])
-            # check if we deleted all lines
-            if os.stat(filename).st_size == 0:
-                self.nuke_entries(daily_date)
-                result.warnings.append(f"Deleted entries file {daily_date} because it was empty")
-        return result
-
     def get_entry(self, daily_date: str) -> List[str]:
         if not self.has_entry(daily_date):
             return []
@@ -229,6 +219,14 @@ class FsDriver:
         with open(filename, mode) as entries_file:
             entries_file.write(content + os.linesep)
 
+    def remove_entry(self, daily_date: str, entry_id: int) -> int:
+        raise NotImplementedError()
+
+    def get_ids(self, daily_date: str) -> List[Tuple[int, str]]:
+        raise NotImplementedError()
+
+    def edit_entry(self, daily_date: str, entry_id: int, updated: str) -> int:
+        raise NotImplementedError()
 
 
 class Tui:
