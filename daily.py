@@ -230,7 +230,8 @@ class FsDriver:
             entries_file.write(content + os.linesep)
 
 
-class BColors:
+
+class Tui:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
@@ -240,6 +241,121 @@ class BColors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+    def __init__(self):
+        self.fzf = FzfPrompt()
+
+    def confirm_action(self, prompt: str) -> bool:
+        print(f"{self.WARNING}{prompt}{self.ENDC}")
+        self.notify_warn(prompt)
+        self.notify_warn("Confirm with y/N")
+        choice = input().lower()
+        return choice in {'yes', 'y'}
+
+    def read_input(self, prompt: str) -> str:
+        try:
+            return input(f"{self.OKGREEN}{prompt}:{self.ENDC}\n")
+        except:
+            return None
+
+    def _color_print(self, color: str, msg: str) -> None:
+        print(f"{color}{msg}{self.ENDC}")
+
+    def pick_entry(self, choices: List[Tuple[int, str]]) -> Optional[str]:
+        choices = [f"{result[0]}, {result[1]}" for result in choices]
+        if not choices:
+            self.notify_warn("Nothing returned")
+            return None
+
+        return self._pick_choice(choices)
+
+    def _pick_choice(self, choices: List) -> Optional[str]:
+        try:
+            return self.fzf.prompt(choices)[0]
+        except:
+            return None
+
+    def render_output(self, result: Result) -> None:
+        if result.warnings:
+            for warning in result.warnings:
+                self.notify_warn(warning)
+
+        for i in result.items:
+            end = "\n"
+            if i.endswith("\n"):
+                end = ""
+            print(f"- {i}", end=end)
+
+    def notify_fail(self, msg: str) -> None:
+        self._color_print(self.FAIL, msg)
+
+    def notify_ok(self, msg: str) -> None:
+        self._color_print(self.OKGREEN, msg)
+
+    def notify_warn(self, msg: str) -> None:
+        self._color_print(self.WARNING, msg)
+
+
+def run_subcommands(daily: Daily, ui: Tui, arg: argparse.Namespace, parsed_date: str):
+    if arg.command == "add":
+        if not arg.message:
+            ui.notify_fail("No message provided")
+            return
+        for messages in arg.message:
+            daily.add_entry(parsed_date, " ".join(messages))
+    elif arg.command == "edit":
+        results = daily.get_ids(parsed_date)
+        choice = ui.pick_entry(results)
+        if not choice:
+            return
+
+        entry_id = choice.split(",")[0]
+        updated_desc = ui.read_input("Enter a new description, confirm with Enter")
+        if not updated_desc:
+            ui.notify_warn("Discarding")
+            return
+        if ui.confirm_action(f"Use this a new input: {updated_desc}"):
+            n = daily.edit_entry(parsed_date, entry_id, updated_desc)
+            ui.notify_ok(f"Updated {n} entries")
+
+    elif arg.command == "remove":
+        results = daily.get_ids(parsed_date)
+        choice = ui.pick_entry(results)
+        if not choice:
+            return
+
+        entry_id = choice.split(",")[0]
+        entries_removed = daily.remove_entry(parsed_date, entry_id)
+        ui.notify_ok(f"Removed {entries_removed} entries")
+
+    elif arg.command == "nuke":
+        daily.get_entry(parsed_date)
+        ui.confirm_action(f"Do you want to delete all entries for {parsed_date}? y/N")
+        nuked_entries = daily.nuke_entries(parsed_date)
+        if nuked_entries:
+            ui.notify_ok(f"Deleted {nuked_entries} entries")
+        else:
+            ui.notify_warn("There were no entries to delete")
+    else:
+        result = daily.get_entry(parsed_date)
+        ui.render_output(result)
+
+
+def main():
+    arg = parse_args()
+
+    # todo: make configurable
+    driver = SqliteDriver(SQLITE_DB_FILE)
+    daily = Daily(driver)
+
+    ui = Tui()
+    try:
+        parsed_date = daily.translate_date(arg.date)
+    except IllegalDateException as err:
+        ui._color_print(Tui.FAIL, str(err))
+        sys.exit(1)
+
+    run_subcommands(daily, ui, arg, parsed_date)
 
 
 def parse_args() -> argparse.Namespace:
@@ -256,63 +372,9 @@ def parse_args() -> argparse.Namespace:
     subparsers.add_parser('get', help='read entries for a given day')
     subparsers.add_parser('edit', help='edit entries for a given day')
     subparsers.add_parser('nuke', help='delete entries for a given day')
+    subparsers.add_parser('remove', help='delete entries for a given day')
 
     return parser.parse_args()
-
-
-def confirm_deletion(prompt: str) -> bool:
-    print(f"{BColors.WARNING}{prompt}{BColors.ENDC}")
-    choice = input().lower()
-    return choice in {'yes', 'y'}
-
-
-def render_output(result: Result) -> None:
-    if result.warnings:
-        for warning in result.warnings:
-            color_print(BColors.WARNING, warning)
-
-    for i in result.items:
-        end = "\n"
-        if i.endswith("\n"):
-            end = ""
-        print(f"- {i}", end=end)
-
-
-def color_print(color: BColors, msg: str) -> None:
-    print(f"{color}{msg}{BColors.ENDC}")
-
-
-def run_subcommands(daily: Daily, arg: argparse.Namespace, parsed_date: str):
-    if arg.command == "add":
-        for messages in arg.message:
-            daily.add_entry(parsed_date, " ".join(messages))
-    elif arg.command == "edit":
-        result = daily.edit_entry(parsed_date)
-        render_output(result)
-    elif arg.command == "nuke":
-        daily.get_entry(parsed_date)
-        confirm_deletion(f"Do you want to delete all entries for {parsed_date}? y/N")
-        if not daily.nuke_entries(parsed_date):
-            color_print(BColors.WARNING, "There were no entries to delete")
-    else:
-        result = daily.get_entry(parsed_date)
-        render_output(result)
-
-
-def main():
-    arg = parse_args()
-
-    driver = SqliteDriver(SQLITE_DB_FILE)
-    daily = Daily(driver)
-
-    parsed_date = None
-    try:
-        parsed_date = daily.translate_date(arg.date)
-    except IllegalDateException as err:
-        color_print(BColors.FAIL, str(err))
-        sys.exit(1)
-
-    run_subcommands(daily, arg, parsed_date)
 
 
 if __name__ == '__main__':
