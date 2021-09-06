@@ -244,7 +244,6 @@ class Tui:
         self.fzf = FzfPrompt()
 
     def confirm_action(self, prompt: str) -> bool:
-        print(f"{self.WARNING}{prompt}{self.ENDC}")
         self.notify_warn(prompt)
         self.notify_warn("Confirm with y/N")
         choice = input().lower()
