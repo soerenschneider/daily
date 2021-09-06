@@ -311,7 +311,7 @@ def run_subcommands(daily: Daily, ui: Tui, arg: argparse.Namespace, parsed_date:
         if not updated_desc:
             ui.notify_warn("Discarding")
             return
-        if ui.confirm_action(f"Use this a new input: {updated_desc}"):
+        if ui.confirm_action(f"Accept new description: '{updated_desc}'?"):
             n = daily.edit_entry(parsed_date, entry_id, updated_desc)
             ui.notify_ok(f"Updated {n} entries")
 
