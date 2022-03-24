@@ -1,5 +1,5 @@
 # ⛔️ DEPRECATION WARNING ⛔️
-Repo is archived and has moved to [here](https://github.com/soerenschneider/scripts/tree/main/daily)
+Repo is archived and has moved [here](https://github.com/soerenschneider/scripts/tree/main/daily)
 
 # daily
 Helps you keeping track of all the things worth to mention during your daily standup
