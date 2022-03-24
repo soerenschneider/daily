@@ -1,3 +1,6 @@
+# ⛔️ DEPRECATED NOTICE ⛔️
+This repo has [moved](https://github.com/soerenschneider/scripts/tree/main/daily)
+
 # daily
 Helps you keeping track of all the things worth to mention during your daily standup
 
